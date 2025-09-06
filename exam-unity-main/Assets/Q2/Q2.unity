@@ -598,8 +598,8 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 81724846}
-        m_TargetAssemblyTypeName: Q3, Assembly-CSharp
-        m_MethodName: OnTouchUpBtnClick
+        m_TargetAssemblyTypeName: Q2, Assembly-CSharp
+        m_MethodName: OnTouchDownBtnClick
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -1060,8 +1060,8 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 81724846}
-        m_TargetAssemblyTypeName: Q3, Assembly-CSharp
-        m_MethodName: OnTouchDownBtnClick
+        m_TargetAssemblyTypeName: Q2, Assembly-CSharp
+        m_MethodName: OnTouchUpBtnClick
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}

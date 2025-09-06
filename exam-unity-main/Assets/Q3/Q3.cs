@@ -24,9 +24,105 @@ using Random = UnityEngine.Random;
 
 public class Q3 : MonoBehaviour
 {
+    const int maxConcurrent = 3;
+    int currentConcurrent = 0;
+    object lockObj = new object();
+    Queue<TaskCompletionSource<bool>> waitingQueue = new Queue<TaskCompletionSource<bool>>();
+    List<Task> loadTasks = new List<Task>();
     public async void OnStartBtnClick()
     {
         // TODO: 请在此处开始作答
+        //loadfile我没找到办法从外部停掉，加上超时控制也只能是增加了一个超时重试机制，实际上的loadfile并发并不能完美控制在3个以内，如果完美控制并发的话超时控制就没有意义了。
+        
+        try
+        {
+            string[] files = await LoadConfig();
+
+            foreach (var file in files)
+            {
+                await AcquireSlot();
+                loadTasks.Add(LoadFileWithRetryAndTimeout(file, 3, 3000).ContinueWith(t => 
+                {
+                    ReleaseSlot();
+                    return t;
+                }).Unwrap());
+            }
+
+            
+            await Task.WhenAll(loadTasks);
+            await InitSystem();
+            Debug.Log("Done");
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"OnStartBtnClick failed: {e.Message}");
+        }
+    }
+    Task AcquireSlot()
+    {
+        lock (lockObj)
+        {
+            if (currentConcurrent < maxConcurrent)
+            {
+                currentConcurrent++;
+                return Task.CompletedTask;
+            }
+            else
+            {
+                var tcs = new TaskCompletionSource<bool>();
+                waitingQueue.Enqueue(tcs);
+                return tcs.Task;
+            }
+        }
+    }
+    void ReleaseSlot()
+    {
+        lock (lockObj)
+        {
+            currentConcurrent--;
+            if (waitingQueue.Count > 0)
+            {
+                var next = waitingQueue.Dequeue();
+                currentConcurrent++;
+                next.SetResult(true);
+            }
+        }
+    }
+    private async Task LoadFileWithRetryAndTimeout(string file, int maxRetryCount, int timeoutMilliseconds)
+    {
+        int retryCount = 0;
+        while (retryCount <= maxRetryCount)
+        {
+            try
+            {
+                var loadTask = LoadFile(file);
+                var timeoutTask = Task.Delay(timeoutMilliseconds);
+                var completedTask = await Task.WhenAny(loadTask, timeoutTask);
+                if (completedTask == timeoutTask)
+                {
+                    throw new TimeoutException($"Load file {file} timeout");
+                }
+                else
+                {
+                    await loadTask;
+                    return;
+                }
+            }
+            catch (Exception e)
+            {
+                retryCount++;
+                Debug.Log("load file fail: "+e.Message);
+                if (retryCount > maxRetryCount)
+                {
+                    Debug.LogError($"Failed to load file {file} after {maxRetryCount} retries. Error: {e.Message}");
+                    return;
+                }
+                int delay = (int)Math.Pow(2, retryCount) * 1000;
+                ReleaseSlot();
+                await Task.Delay(delay);
+                await AcquireSlot();
+            }
+        }
     }
 
     // #region 以下是辅助测试题而写的一些 mock 函数，请勿修改
